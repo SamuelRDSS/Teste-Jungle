@@ -79,7 +79,8 @@ export function CheckoutPage() {
             </div>
             {quote.data.warnings.length > 0 && <div role="alert" className="rounded-xl border border-amber-300/20 bg-amber-300/5 p-3 text-sm text-amber-200">{quote.data.warnings.map((w) => <p key={w}>{w}</p>)}</div>}
             <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} /> <span>Revisei preco, disponibilidade, cupom, taxas e total desta cotacao.</span></label>
-            {error && <p role="alert" className="text-sm text-red-300">{error}</p>}
+            {error && !quote.data.warnings.length && <p role="alert" className="text-sm text-red-300">{error}</p>}
+            {error && quote.data.warnings.length > 0 && <p className="text-sm text-red-300">{error}</p>}
             <div className="flex flex-wrap gap-3">
               <Button type="button" variant="outline" onClick={() => { setConfirmed(false); void quote.refetch() }}>Solicitar nova cotacao</Button>
               <Button type="submit" disabled={orderMutation.isPending || quote.isFetching}>{orderMutation.isPending ? 'Enviando...' : 'Confirmar pedido'}</Button>

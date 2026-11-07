@@ -1,4 +1,4 @@
-import { getCurrentSession } from './auth-store'
+﻿import { getCurrentSession } from './auth-store'
 import { getCart, removeItem } from './cart-store'
 import { decrementStock, getNft, updateNft } from './nft-store'
 import { getScenario, type MockScenario } from './scenarios'
@@ -176,7 +176,7 @@ export async function createOrder(
       name: item.name,
       artist: item.artist,
       image: item.image,
-      edition: getNft(item.nftId)?.edition ?? '—',
+      edition: getNft(item.nftId)?.edition ?? 'â€”',
       quantity: item.quantity,
       unitPriceEth: item.unitPriceEth,
       lineTotalEth: item.lineTotalEth,
@@ -195,6 +195,7 @@ export async function createOrder(
   }
   orders.orders.push(order)
   writeOrders(orders)
+  // Keep cart for declined/pending so the user can retry or recover.
   if (order.status === 'confirmed') {
     for (const item of quote.items) await removeItem(item.nftId)
   }
@@ -202,22 +203,28 @@ export async function createOrder(
   return { status: 201, body: order }
 }
 
+function resolvePendingOrder(orderId: string) {
+  const store = readOrders()
+  const order = store.orders.find((item) => item.orderId === orderId && item.status === 'pending')
+  if (!order) return
+  order.status = 'confirmed'
+  order.confirmedAt = nowIso()
+  order.updatedAt = nowIso()
+  order.transactionRef = `tx_${crypto.randomUUID().slice(0, 12)}`
+  order.explorerUrl = `https://explorer.example/tx/${order.transactionRef}`
+  order.message = 'Pedido confirmado apos recuperacao.'
+  writeOrders(store)
+  for (const item of order.items) void removeItem(item.nftId)
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('mintora:order-updated', { detail: { orderId, version: Date.now() } }))
+  }
+}
+
 function schedulePendingResolution(orderId: string, scenario: MockScenario) {
   if (scenario.paymentResult !== 'pending-timeout') return
-  setTimeout(() => {
-    const store = readOrders()
-    const order = store.orders.find((item) => item.orderId === orderId && item.status === 'pending')
-    if (!order) return
-    order.status = 'confirmed'
-    order.confirmedAt = nowIso()
-    order.updatedAt = nowIso()
-    order.transactionRef = `tx_${crypto.randomUUID().slice(0, 12)}`
-    order.explorerUrl = `https://explorer.example/tx/${order.transactionRef}`
-    order.message = 'Pedido confirmado apos recuperacao.'
-    writeOrders(store)
-    for (const item of order.items) void removeItem(item.nftId)
-    window.dispatchEvent(new CustomEvent('mintora:order-updated', { detail: { orderId, version: Date.now() } }))
-  }, 1800)
+  // Resolve on next tick so refresh/poll observes confirmed state even when
+  // the mock socket event path is not wired in the current execution context.
+  setTimeout(() => resolvePendingOrder(orderId), 0)
 }
 
 export async function listOrders(): Promise<OrderReceipt[]> {

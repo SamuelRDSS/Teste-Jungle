@@ -1,7 +1,19 @@
 import { expect, type Page } from '@playwright/test'
 
 export async function resetScenario(page: Page, body: Record<string, unknown> = { reset: true }) {
-  await page.request.post('/api/test/scenario', { data: body })
+  await page.waitForFunction(
+    () => navigator.serviceWorker?.controller != null,
+    null,
+    { timeout: 10_000 },
+  )
+  await page.evaluate(async (payload) => {
+    const response = await fetch('/api/test/scenario', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    if (!response.ok) throw new Error(`Scenario reset failed: ${response.status}`)
+  }, body)
 }
 
 export async function loginAs(page: Page, email = 'demo@mintora.art', password = 'Mintora2026!', returnTo = '/profile') {
